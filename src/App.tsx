@@ -122,6 +122,49 @@ function Game({ name, room }: { name: string; room: string }) {
     return o;
   }, [me]);
 
+  const prevCur = useRef("");
+  useLayoutEffect(() => {
+    const prev = prevCur.current; prevCur.current = cur;
+    if (cur.length === prev.length + 1 && cur.startsWith(prev)) flyLetter(cur[cur.length - 1], cur.length - 1);
+  }, [cur]);
+
+  // letter lifts off its key and arcs into the tile, trailing Dinagyang colors
+  function flyLetter(ch: string, idx: number) {
+    if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+    const tile = boardRef.current?.querySelector<HTMLElement>(`.row.cur .tile:nth-child(${idx + 1})`);
+    const key = document.querySelector<HTMLElement>(`.key[data-k="${ch}"]`);
+    if (!tile || !key) return;
+    const a = key.getBoundingClientRect(), b = tile.getBoundingClientRect();
+    const sx = a.left + a.width / 2, sy = a.top + a.height / 2, ex = b.left + b.width / 2, ey = b.top + b.height / 2;
+    const el = document.createElement("div"); el.className = "fly"; el.textContent = ch; document.body.appendChild(el);
+    tile.classList.add("hide");
+    const colors = ["#e03b24", "#f4b81c", "#17a3a8"]; let n = 0;
+    const arc = Math.min(90, Math.hypot(ex - sx, ey - sy) * 0.35);
+    const o = { p: 0 };
+    const spark = (x: number, y: number, c: string) => {
+      const d = document.createElement("i"); d.className = "spark"; d.style.background = c; d.style.left = x + "px"; d.style.top = y + "px";
+      document.body.appendChild(d); return d;
+    };
+    gsap.set(el, { xPercent: -50, yPercent: -50, left: sx, top: sy, scale: 0.8 });
+    gsap.to(o, {
+      p: 1, duration: 0.36, ease: "power2.in",
+      onUpdate: () => {
+        const x = sx + (ex - sx) * o.p, y = sy + (ey - sy) * o.p - Math.sin(Math.PI * o.p) * arc;
+        gsap.set(el, { left: x, top: y, scale: 0.8 + o.p * 0.5, rotation: o.p * 360 });
+        const d = spark(x, y, colors[n++ % 3]);
+        gsap.to(d, { scale: 0, opacity: 0, x: gsap.utils.random(-8, 8), y: gsap.utils.random(-8, 8), duration: 0.5, ease: "power1.out", onComplete: () => d.remove() });
+      },
+      onComplete: () => {
+        el.remove(); tile.classList.remove("hide");
+        gsap.fromTo(tile, { scale: 1.3 }, { scale: 1, duration: 0.35, ease: "back.out(3)" });
+        for (let i = 0; i < 6; i++) {
+          const s = spark(ex, ey, colors[i % 3]);
+          gsap.to(s, { x: gsap.utils.random(-28, 28), y: gsap.utils.random(-28, 28), scale: 0, opacity: 0, duration: 0.4, ease: "power2.out", onComplete: () => s.remove() });
+        }
+      },
+    });
+  }
+
   function burst() {
     const root = document.getElementById("confetti"); if (!root) return;
     for (let i = 0; i < 40; i++) {
@@ -173,7 +216,7 @@ function Game({ name, room }: { name: string; room: string }) {
               {KB.map((row, ri) => (
                 <div key={ri}>
                   {ri === 2 && <button className="key wide" onClick={() => press("enter")}>Enter</button>}
-                  {[...row].map((k) => <button key={k} className={"key " + (keyState[k] ?? "")} onClick={() => press(k)}>{k}</button>)}
+                  {[...row].map((k) => <button key={k} data-k={k} className={"key " + (keyState[k] ?? "")} onClick={() => press(k)}>{k}</button>)}
                   {ri === 2 && <button className="key wide" onClick={() => press("back")}>⌫</button>}
                 </div>
               ))}
