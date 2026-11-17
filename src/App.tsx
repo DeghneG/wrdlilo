@@ -1,16 +1,29 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
-import PartySocket from "partysocket";
-import type { ClientMsg, PlayerView, ServerMsg, StateMsg } from "../shared/score";
+import { score } from "../shared/score";
+import { MAX_TRIES, PER_DAY, msUntilReset, today, wordsForDay } from "../shared/daily";
 
-const HOST = (import.meta.env.VITE_PARTY_HOST as string) || "localhost:1999";
 const KB = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
-const store = {
-  get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
-  set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
-};
-const myId = store.get("wl-id") ?? (() => { const v = Math.random().toString(36).slice(2, 12); store.set("wl-id", v); return v; })();
-const params = new URLSearchParams(location.search);
+const KEY = "wl-daily-v1";
+
+interface Progress { date: string; idx: number; guesses: string[][] }
+
+// Today's 10 words (same for everyone) plus this browser's saved progress for today.
+function load(): { words: string[]; prog: Progress } {
+  const t = today();
+  const words = wordsForDay(t.day);
+  let prog: Progress = { date: t.date, idx: 0, guesses: [] };
+  try {
+    const p = JSON.parse(localStorage.getItem(KEY) ?? "null");
+    const ok = p && p.date === t.date && Number.isInteger(p.idx) && p.idx >= 0 && p.idx <= PER_DAY &&
+      Array.isArray(p.guesses) && p.guesses.length <= PER_DAY &&
+      p.guesses.every((g: unknown) => Array.isArray(g) && g.length <= MAX_TRIES && g.every((w) => typeof w === "string" && /^[a-zñ]{5}$/.test(w)));
+    if (ok) prog = p;
+  } catch { /* start fresh */ }
+  return { words, prog };
+}
+
+const finished = (g: string[] | undefined, answer: string | undefined) => !!g && !!answer && (g.includes(answer) || g.length >= MAX_TRIES);
 
 // The "o" in Wrdlilo: an original Ati-Atihan style mask with a fanned headdress.
 function MaskO() {
@@ -39,97 +52,63 @@ function Logo({ small }: { small?: boolean }) {
 }
 
 export default function App() {
-  const [name, setName] = useState(store.get("wl-name") ?? "");
-  const [room, setRoom] = useState(params.get("room") ?? "");
-  const [joined, setJoined] = useState(false);
-  if (!joined)
-    return (
-      <Lobby name={name} room={room} setName={setName} setRoom={setRoom}
-        onGo={() => { store.set("wl-name", name); history.replaceState(null, "", `?room=${room}`); setJoined(true); }} />
-    );
-  return <Game name={name} room={room} />;
-}
-
-function Lobby(p: { name: string; room: string; setName: (s: string) => void; setRoom: (s: string) => void; onGo: () => void }) {
-  const ok = p.name.trim() && p.room.trim();
-  return (
-    <main className="page lobby"><div className="stage">
-      <Logo />
-      <p className="tag">Guess the word. One word for everyone in the room.</p>
-      <form onSubmit={(e) => { e.preventDefault(); if (ok) p.onGo(); }} className="lobby-form">
-        <label>Name<input value={p.name} maxLength={16} onChange={(e) => p.setName(e.target.value)} autoFocus /></label>
-        <label>Room
-          <span className="row-in">
-            <input value={p.room} onChange={(e) => p.setRoom(e.target.value.replace(/[^\w-]/g, "").toLowerCase())} />
-            <button type="button" className="ghost" onClick={() => p.setRoom("balay-" + Math.floor(Math.random() * 900 + 100))}>New</button>
-          </span>
-        </label>
-        <button className="go" disabled={!ok}>Join</button>
-      </form>
-      <p className="hint">Share the link with your friends after you join.</p>
-      </div>
-    </main>
-  );
-}
-
-function Game({ name, room }: { name: string; room: string }) {
-  const [st, setSt] = useState<StateMsg | null>(null);
+  const [{ words, prog }, setState] = useState(load);
   const [cur, setCur] = useState("");
   const [toast, setToast] = useState("");
-  const [conn, setConn] = useState(false);
-  const sock = useRef<PartySocket | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
-  const prevRows = useRef(0);
-  const prevRound = useRef(0);
+  const prevRows = useRef(-1);
+  const prevIdx = useRef(-1);
+  const prevCur = useRef("");
 
-  const pending = useRef(false);
-  const send = useCallback((m: ClientMsg) => sock.current?.send(JSON.stringify(m)), []);
+  const setProg = (f: (p: Progress) => Progress) => setState((s) => ({ ...s, prog: f(s.prog) }));
   const say = (s: string) => { setToast(s); setTimeout(() => setToast(""), 1600); };
+
+  useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(prog)); } catch { /* ignore */ } }, [prog]);
+  // A new day (midnight Manila) swaps in the new 10 words, even if the page was left open.
+  useEffect(() => {
+    const t = setInterval(() => { if (today().date !== prog.date) { setCur(""); setState(load()); } }, 15000);
+    return () => clearInterval(t);
+  }, [prog.date]);
+
+  const idx = prog.idx;
+  const over = idx >= PER_DAY;
+  const answer = words[idx];
+  const g = useMemo(() => prog.guesses[idx] ?? [], [prog.guesses, idx]);
+  const marks = useMemo(() => g.map((x) => score(x, answer ?? "")), [g, answer]);
+  const won = !!answer && g.includes(answer);
+  const done = finished(g, answer);
 
   function shake() {
     const r = boardRef.current?.querySelector<HTMLElement>(".row.cur");
     if (r) gsap.fromTo(r, { x: -8 }, { x: 0, duration: 0.4, ease: "elastic.out(6,0.3)" });
   }
 
-  useEffect(() => {
-    const ws = new PartySocket({ host: HOST, room });
-    sock.current = ws;
-    ws.addEventListener("open", () => { setConn(true); ws.send(JSON.stringify({ t: "join", id: myId, name } satisfies ClientMsg)); });
-    ws.addEventListener("close", () => setConn(false));
-    ws.addEventListener("message", (e) => {
-      const m: ServerMsg = JSON.parse(e.data);
-      pending.current = false;
-      if (m.t === "state") setSt(m);
-      else { say(m.msg); shake(); }
-    });
-    return () => ws.close();
-  }, [room, name]);
-
-  const me = st?.players.find((p) => p.id === st.you);
-  const myRows = me?.marks.length ?? 0;
-  const done = !!me?.done;
-
-  // drum-pop reveal when a new row lands; reset on new round
+  // drum-pop reveal when a guess lands; confetti on a win
   useLayoutEffect(() => {
-    if (!st) return;
-    if (st.round !== prevRound.current) { prevRound.current = st.round; prevRows.current = myRows; setCur(""); return; }
-    if (myRows > prevRows.current) {
-      const tiles = boardRef.current?.querySelectorAll<HTMLElement>(`.row[data-r="${myRows - 1}"] .tile`);
+    if (prevRows.current === -1 || prevIdx.current !== idx) { prevIdx.current = idx; prevRows.current = g.length; return; }
+    if (g.length > prevRows.current) {
+      const tiles = boardRef.current?.querySelectorAll<HTMLElement>(`.row[data-r="${g.length - 1}"] .tile`);
       if (tiles) gsap.fromTo(tiles, { scale: 1.3, y: -6 }, { scale: 1, y: 0, duration: 0.45, stagger: 0.09, ease: "back.out(3)" });
-      setCur("");
-      if (me?.won) burst();
+      if (won) burst();
     }
-    prevRows.current = myRows;
-  }, [st, myRows, me?.won]);
+    prevRows.current = g.length;
+  }, [idx, g.length, won]);
 
   const press = useCallback((k: string) => {
-    if (!st || done) return;
+    if (over || done) return;
     if (k === "enter") {
-      if (pending.current) return;
-      if (cur.length === 5) { pending.current = true; setTimeout(() => { pending.current = false; }, 2000); send({ t: "guess", word: cur }); } else { say("Not enough letters"); shake(); } }
-    else if (k === "back") setCur((c) => c.slice(0, -1));
+      if (cur.length !== 5) { say("Not enough letters"); shake(); return; }
+      const word = cur;
+      setCur("");
+      setProg((p) => {
+        const guesses = p.guesses.map((x) => [...x]);
+        while (guesses.length <= p.idx) guesses.push([]);
+        if (guesses[p.idx].length < MAX_TRIES) guesses[p.idx].push(word);
+        return { ...p, guesses };
+      });
+    } else if (k === "back") setCur((c) => c.slice(0, -1));
     else if (/^[a-zñ]$/.test(k)) setCur((c) => (c.length < 5 ? c + k : c));
-  }, [st, done, cur, send]);
+  }, [over, done, cur]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -144,20 +123,19 @@ function Game({ name, room }: { name: string; room: string }) {
 
   const keyState = useMemo(() => {
     const o: Record<string, string> = {}; const rank: Record<string, number> = { a: 0, p: 1, c: 2 };
-    me?.letters?.forEach((g, gi) => [...g].forEach((ch, i) => { const s = me.marks[gi][i]; if (o[ch] === undefined || rank[s] > rank[o[ch]]) o[ch] = s; }));
+    g.forEach((w, gi) => [...w].forEach((ch, i) => { const s = marks[gi][i]; if (o[ch] === undefined || rank[s] > rank[o[ch]]) o[ch] = s; }));
     return o;
-  }, [me]);
+  }, [g, marks]);
 
-  const prevCur = useRef("");
   useLayoutEffect(() => {
     const prev = prevCur.current; prevCur.current = cur;
     if (cur.length === prev.length + 1 && cur.startsWith(prev)) flyLetter(cur[cur.length - 1], cur.length - 1);
   }, [cur]);
 
   // letter lifts off its key and arcs into the tile, trailing Dinagyang colors
-  function flyLetter(ch: string, idx: number) {
+  function flyLetter(ch: string, i: number) {
     if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
-    const tile = boardRef.current?.querySelector<HTMLElement>(`.row.cur .tile:nth-child(${idx + 1})`);
+    const tile = boardRef.current?.querySelector<HTMLElement>(`.row.cur .tile:nth-child(${i + 1})`);
     const key = document.querySelector<HTMLElement>(`.key[data-k="${ch}"]`);
     if (!tile || !key) return;
     const a = key.getBoundingClientRect(), b = tile.getBoundingClientRect();
@@ -183,8 +161,8 @@ function Game({ name, room }: { name: string; room: string }) {
       onComplete: () => {
         el.remove(); tile.classList.remove("hide");
         gsap.fromTo(tile, { scale: 1.3 }, { scale: 1, duration: 0.35, ease: "back.out(3)" });
-        for (let i = 0; i < 6; i++) {
-          const s = spark(ex, ey, colors[i % 3]);
+        for (let j = 0; j < 6; j++) {
+          const s = spark(ex, ey, colors[j % 3]);
           gsap.to(s, { x: gsap.utils.random(-28, 28), y: gsap.utils.random(-28, 28), scale: 0, opacity: 0, duration: 0.4, ease: "power2.out", onComplete: () => s.remove() });
         }
       },
@@ -199,79 +177,107 @@ function Game({ name, room }: { name: string; room: string }) {
     }
   }
 
-  const link = `${location.origin}/?room=${room}`;
-  const others = st?.players.filter((p) => p.id !== st.you) ?? [];
-  const waiting = others.filter((p) => p.online && !p.done && p.marks.length > 0).length;
+  if (over) return <Summary words={words} prog={prog} />;
 
   return (
     <main className="page game"><div className="stage">
       <header className="top">
         <Logo small />
-        <div className="roombar">
-          <span className={"dot" + (conn ? " on" : "")} /> <b>{room}</b> · round {st?.round ?? "-"}
-          <button className="ghost" onClick={() => { navigator.clipboard?.writeText(link).then(() => say("Link copied"), () => say(link)); }}>Copy link</button>
+        <div className="roombar">Word {idx + 1} of {PER_DAY}</div>
+        <div className="pips" aria-hidden="true">
+          {Array.from({ length: PER_DAY }, (_, i) => {
+            const gg = prog.guesses[i], w = words[i];
+            const cls = finished(gg, w) ? (gg!.includes(w) ? "c" : "x") : i === idx ? "cur" : "";
+            return <span key={i} className={"pip " + cls} />;
+          })}
         </div>
       </header>
 
-      <div className="layout">
-        <section className="me">
-          <div className="board" ref={boardRef}>
-            {Array.from({ length: st?.maxTries ?? 6 }, (_, r) => {
-              const typing = r === myRows && !done;
-              const letters = me?.letters?.[r] ?? (typing ? cur : "");
-              return (
-                <div key={r} data-r={r} className={"row" + (typing ? " cur" : "")}>
-                  {Array.from({ length: 5 }, (_, i) => (
-                    <div key={i} className={"tile " + (me?.marks[r]?.[i] ?? (letters[i] ? "f" : ""))}>{letters[i] ?? ""}</div>
-                  ))}
-                </div>
-              );
-            })}
-            <div id="confetti" />
+      <section className="me">
+        <div className="board" ref={boardRef}>
+          {Array.from({ length: MAX_TRIES }, (_, r) => {
+            const typing = r === g.length && !done;
+            const letters = g[r] ?? (typing ? cur : "");
+            return (
+              <div key={r} data-r={r} className={"row" + (typing ? " cur" : "")}>
+                {Array.from({ length: 5 }, (_, i) => (
+                  <div key={i} className={"tile " + (marks[r]?.[i] ?? (letters[i] ? "f" : ""))}>{letters[i] ?? ""}</div>
+                ))}
+              </div>
+            );
+          })}
+          <div id="confetti" />
+        </div>
+
+        {done ? (
+          <div className="end">
+            <p>{won ? `You got it in ${g.length}!` : "Out of tries."} The word: <b className="ans">{answer}</b></p>
+            <button className="go" onClick={() => { setCur(""); setProg((p) => ({ ...p, idx: p.idx + 1 })); }}>
+              {idx === PER_DAY - 1 ? "See results" : "Next word"}
+            </button>
           </div>
-
-          {done ? (
-            <div className="end">
-              <p>{me?.won ? "You got it!" : "Not this time."} The word: <b className="ans">{st?.answer}</b></p>
-              <button className="go" disabled={waiting > 0} onClick={() => send({ t: "next" })}>
-                {waiting > 0 ? `Waiting for ${waiting} ${waiting === 1 ? "friend" : "friends"}` : "New word"}
-              </button>
-            </div>
-          ) : (
-            <div className="kb">
-              {KB.map((row, ri) => (
-                <div key={ri}>
-                  {ri === 2 && <button className="key wide" onClick={() => press("enter")}>Enter</button>}
-                  {[...row].map((k) => <button key={k} data-k={k} className={"key " + (keyState[k] ?? "")} onClick={() => press(k)}>{k}</button>)}
-                  {ri === 2 && <button className="key wide" onClick={() => press("back")}>⌫</button>}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <aside className="friends">
-          <h2>Friends</h2>
-          {others.length === 0 && <p className="hint">No one else yet. Share the link.</p>}
-          {others.map((p) => <Mini key={p.id} p={p} max={st?.maxTries ?? 6} />)}
-        </aside>
-      </div>
-      </div>{toast && <div className="toast">{toast}</div>}
-    </main>
+        ) : (
+          <div className="kb">
+            {KB.map((row, ri) => (
+              <div key={ri}>
+                {ri === 2 && <button className="key wide" onClick={() => press("enter")}>Enter</button>}
+                {[...row].map((k) => <button key={k} data-k={k} className={"key " + (keyState[k] ?? "")} onClick={() => press(k)}>{k}</button>)}
+                {ri === 2 && <button className="key wide" onClick={() => press("back")}>⌫</button>}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>{toast && <div className="toast">{toast}</div>}</main>
   );
 }
 
-function Mini({ p, max }: { p: PlayerView; max: number }) {
+const EMOJI: Record<string, string> = { c: "🟩", p: "🟨", a: "⬛" };
+
+function Summary({ words, prog }: { words: string[]; prog: Progress }) {
+  const [left, setLeft] = useState(msUntilReset());
+  const [copied, setCopied] = useState("");
+  useEffect(() => {
+    const t = setInterval(() => {
+      const ms = msUntilReset();
+      setLeft(ms);
+      if (today().date !== prog.date) location.reload();
+    }, 1000);
+    return () => clearInterval(t);
+  }, [prog.date]);
+
+  const rows = words.map((w, i) => {
+    const gg = prog.guesses[i] ?? [];
+    const solved = gg.includes(w);
+    const last = gg.length ? score(gg[gg.length - 1], w) : "aaaaa";
+    return { w, solved, tries: gg.length, last };
+  });
+  const solvedCount = rows.filter((r) => r.solved).length;
+  const text = `Wrdlilo ${prog.date}  ${solvedCount}/${PER_DAY}\n` +
+    rows.map((r, i) => `${i + 1} ${[...r.last].map((m) => EMOJI[m]).join("")} ${r.solved ? r.tries : "X"}/${MAX_TRIES}`).join("\n");
+  const copy = () => {
+    const ok = () => { setCopied("Copied!"); setTimeout(() => setCopied(""), 1600); };
+    navigator.clipboard?.writeText(text).then(ok, () => setCopied("Copy blocked, select and copy manually"));
+  };
+  const s = Math.max(0, Math.floor(left / 1000));
+  const clock = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map((n) => String(n).padStart(2, "0")).join(":");
+
   return (
-    <div className={"mini" + (p.online ? "" : " off")}>
-      <div className="mini-h"><b>{p.name}</b><span>{p.done ? (p.won ? "solved" : "finished") : `${p.marks.length}/${max}`}</span></div>
-      <div className="mini-b">
-        {Array.from({ length: max }, (_, r) => (
-          <div key={r} className="mrow">
-            {Array.from({ length: 5 }, (_, i) => <i key={i} className={"mt " + (p.marks[r]?.[i] ?? "")}>{p.letters?.[r]?.[i] ?? ""}</i>)}
+    <main className="page"><div className="stage">
+      <Logo small />
+      <p className="tag">Done for today: <b>{solvedCount}</b> of {PER_DAY} solved</p>
+      <div className="sum">
+        {rows.map((r, i) => (
+          <div key={i} className="sumrow">
+            <span className="num">{i + 1}</span>
+            <span className="sumword">{r.w}</span>
+            <span className="sq">{[...r.last].map((m, j) => <i key={j} className={"mt " + m} />)}</span>
+            <span className="count">{r.solved ? r.tries : "X"}/{MAX_TRIES}</span>
           </div>
         ))}
       </div>
-    </div>
+      <p className="hint">New words in <b className="clock">{clock}</b> (midnight, Manila time)</p>
+      <button className="go" onClick={copy}>{copied || "Copy results"}</button>
+    </div></main>
   );
 }

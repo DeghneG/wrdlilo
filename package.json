@@ -4,13 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n web,room -c yellow,red \"vite --host\" \"partykit dev\"",
+    "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
-    "deploy:room": "partykit deploy"
+    "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/bowlby-one": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
     "gsap": "^3.15.0",
-    "partysocket": "*",
     "react": "*",
     "react-dom": "*"
   },
@@ -18,10 +19,7 @@
     "@types/react": "*",
     "@types/react-dom": "*",
     "@vitejs/plugin-react": "*",
-    "concurrently": "*",
-    "partykit": "*",
     "typescript": "*",
-    "vite": "*",
-    "ws": "*"
+    "vite": "*"
   }
 }
