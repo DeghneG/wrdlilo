@@ -3,6 +3,7 @@ import gsap from "gsap";
 import { score } from "../shared/score";
 import { DESC_COST, LETTER_COST, MAX_TRIES, PER_DAY, POINTS, msUntilReset, today, wordsForDay } from "../shared/daily";
 import { HINTS } from "../shared/words";
+import { VALID } from "../shared/dictionary";
 
 const KB = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
 const KEY = "wl-daily-v1";
@@ -143,6 +144,7 @@ export default function App() {
     if (over || done) return;
     if (k === "enter") {
       if (cur.length !== 5) { say("Not enough letters"); shake(); return; }
+      if (!VALID.has(cur)) { say("Not in the Ilonggo word list"); shake(); return; }
       const word = cur;
       setCur("");
       setProg((p) => {
@@ -291,6 +293,7 @@ export default function App() {
           </div>
         )}
       </section>
+      <p className="credit">Word list from <a href="https://en.wiktionary.org" target="_blank" rel="noreferrer">Wiktionary</a> (CC BY-SA)</p>
     </div>{toast && <div className="toast">{toast}</div>}</main>
   );
 }
@@ -341,6 +344,7 @@ function Summary({ words, prog }: { words: string[]; prog: Progress }) {
       </div>
       <p className="hint">New words in <b className="clock">{clock}</b> (midnight, Manila time)</p>
       <button className="go" onClick={copy}>{copied || "Copy results"}</button>
+      <p className="credit">Word list from <a href="https://en.wiktionary.org" target="_blank" rel="noreferrer">Wiktionary</a> (CC BY-SA)</p>
     </div></main>
   );
 }
