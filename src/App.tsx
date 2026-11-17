@@ -27,7 +27,7 @@ export default function App() {
 function Lobby(p: { name: string; room: string; setName: (s: string) => void; setRoom: (s: string) => void; onGo: () => void }) {
   const ok = p.name.trim() && p.room.trim();
   return (
-    <main className="page lobby">
+    <main className="page lobby"><div className="stage">
       <h1 className="logo">Wrdlilo</h1>
       <p className="tag">Hulaton ang pulong. Isa lang nga pulong para sa tanan sa kwarto.</p>
       <form onSubmit={(e) => { e.preventDefault(); if (ok) p.onGo(); }} className="lobby-form">
@@ -41,6 +41,7 @@ function Lobby(p: { name: string; room: string; setName: (s: string) => void; se
         <button className="go" disabled={!ok}>Pasulod</button>
       </form>
       <p className="hint">Ipadala ang link sa imo mga abyan pagkatapos magsulod.</p>
+      </div>
     </main>
   );
 }
@@ -129,9 +130,10 @@ function Game({ name, room }: { name: string; room: string }) {
   const others = st?.players.filter((p) => p.id !== st.you) ?? [];
 
   return (
-    <main className="page game">
+    <main className="page game"><div className="stage">
       <header className="top">
         <h1 className="logo sm">Wrdlilo</h1>
+        <p className="sub">Dinagyang</p>
         <div className="roombar">
           <span className={"dot" + (conn ? " on" : "")} /> <b>{room}</b> · round {st?.round ?? "-"}
           <button className="ghost" onClick={() => { navigator.clipboard?.writeText(link).then(() => say("Link nakopya"), () => say(link)); }}>Kopyaha ang link</button>
@@ -179,7 +181,7 @@ function Game({ name, room }: { name: string; room: string }) {
           {others.map((p) => <Mini key={p.id} p={p} max={st?.maxTries ?? 6} />)}
         </aside>
       </div>
-      {toast && <div className="toast">{toast}</div>}
+      </div>{toast && <div className="toast">{toast}</div>}
     </main>
   );
 }
