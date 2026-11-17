@@ -133,7 +133,6 @@ function Game({ name, room }: { name: string; room: string }) {
     <main className="page game"><div className="stage">
       <header className="top">
         <h1 className="logo sm">Wrdlilo</h1>
-        <p className="sub">Dinagyang</p>
         <div className="roombar">
           <span className={"dot" + (conn ? " on" : "")} /> <b>{room}</b> · round {st?.round ?? "-"}
           <button className="ghost" onClick={() => { navigator.clipboard?.writeText(link).then(() => say("Link nakopya"), () => say(link)); }}>Kopyaha ang link</button>
