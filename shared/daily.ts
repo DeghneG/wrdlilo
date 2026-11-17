@@ -2,6 +2,9 @@ import { ANSWERS } from "./words";
 
 export const PER_DAY = 10;
 export const MAX_TRIES = 6;
+export const POINTS = 10; // clue points per day, shared across all 10 words
+export const LETTER_COST = 1;
+export const DESC_COST = 3;
 const MANILA_OFFSET_MS = 8 * 3600_000; // Asia/Manila is UTC+8 all year (no daylight saving)
 
 const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" });

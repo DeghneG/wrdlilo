@@ -70,3 +70,11 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .sumrow .num{color:#bfae8d;font-size:13px}.sumword{font-family:var(--display);text-transform:uppercase;letter-spacing:.06em}
 .sq{display:flex;gap:3px}.count{text-align:right;font-weight:700;color:var(--gold)}
 .clock{font-family:var(--display);font-size:20px;color:var(--gold);letter-spacing:.06em}
+.clues{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.cbtn{background:transparent;color:var(--cream);border:2px solid var(--gold);padding:9px 14px;font-size:13px;letter-spacing:.02em}
+.cbtn:hover:not(:disabled){background:var(--gold);color:var(--ash)}
+.cbtn:disabled{opacity:.35;cursor:not-allowed;border-color:var(--line)}
+.clue{display:grid;gap:12px;justify-items:center}
+.hint-letters{display:flex;gap:6px}
+.hl{width:36px;height:36px;display:grid;place-items:center;background:#0f0b09;border:2px dashed #7a6248;color:var(--gold);font-family:var(--display);text-transform:uppercase}
+.desc{margin:0;max-width:380px;text-align:center;font-style:italic;color:var(--cream);line-height:1.45}

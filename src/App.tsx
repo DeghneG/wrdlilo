@@ -1,24 +1,42 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
 import { score } from "../shared/score";
-import { MAX_TRIES, PER_DAY, msUntilReset, today, wordsForDay } from "../shared/daily";
+import { DESC_COST, LETTER_COST, MAX_TRIES, PER_DAY, POINTS, msUntilReset, today, wordsForDay } from "../shared/daily";
+import { HINTS } from "../shared/words";
 
 const KB = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
 const KEY = "wl-daily-v1";
 
-interface Progress { date: string; idx: number; guesses: string[][] }
+interface Clue { letters: number[]; desc: boolean }
+interface Progress { date: string; idx: number; guesses: string[][]; clues: Record<number, Clue> }
+
+const spentOn = (c?: Clue) => (c ? c.letters.length * LETTER_COST + (c.desc ? DESC_COST : 0) : 0);
+const spentTotal = (clues: Record<number, Clue>) => Object.values(clues).reduce((n, c) => n + spentOn(c), 0);
+
+function cleanClues(raw: unknown): Record<number, Clue> {
+  const out: Record<number, Clue> = {};
+  if (raw && typeof raw === "object") {
+    for (const [k, v] of Object.entries(raw as Record<string, Clue>)) {
+      const i = Number(k);
+      if (!Number.isInteger(i) || i < 0 || i >= PER_DAY || !v || !Array.isArray(v.letters)) continue;
+      const letters = [...new Set(v.letters.filter((n) => Number.isInteger(n) && n >= 0 && n < 5))];
+      out[i] = { letters, desc: v.desc === true };
+    }
+  }
+  return spentTotal(out) <= POINTS ? out : {};
+}
 
 // Today's 10 words (same for everyone) plus this browser's saved progress for today.
 function load(): { words: string[]; prog: Progress } {
   const t = today();
   const words = wordsForDay(t.day);
-  let prog: Progress = { date: t.date, idx: 0, guesses: [] };
+  let prog: Progress = { date: t.date, idx: 0, guesses: [], clues: {} };
   try {
     const p = JSON.parse(localStorage.getItem(KEY) ?? "null");
     const ok = p && p.date === t.date && Number.isInteger(p.idx) && p.idx >= 0 && p.idx <= PER_DAY &&
       Array.isArray(p.guesses) && p.guesses.length <= PER_DAY &&
       p.guesses.every((g: unknown) => Array.isArray(g) && g.length <= MAX_TRIES && g.every((w) => typeof w === "string" && /^[a-zñ]{5}$/.test(w)));
-    if (ok) prog = p;
+    if (ok) prog = { date: p.date, idx: p.idx, guesses: p.guesses, clues: cleanClues(p.clues) };
   } catch { /* start fresh */ }
   return { words, prog };
 }
@@ -77,6 +95,33 @@ export default function App() {
   const marks = useMemo(() => g.map((x) => score(x, answer ?? "")), [g, answer]);
   const won = !!answer && g.includes(answer);
   const done = finished(g, answer);
+
+  const clue = prog.clues[idx] ?? { letters: [], desc: false };
+  const left = POINTS - spentTotal(prog.clues);
+  const canLetter = !done && !over && left >= LETTER_COST && clue.letters.length < 5;
+  const canDesc = !done && !over && left >= DESC_COST && !clue.desc;
+
+  function revealLetter() {
+    if (!canLetter) return;
+    const lastMarks = marks[marks.length - 1];
+    const free = [0, 1, 2, 3, 4].filter((i) => !clue.letters.includes(i));
+    const useful = free.filter((i) => lastMarks?.[i] !== "c"); // prefer a spot you have not already got right
+    const pool = useful.length ? useful : free;
+    const pos = pool[Math.floor(Math.random() * pool.length)];
+    setProg((p) => {
+      const c = p.clues[p.idx] ?? { letters: [], desc: false };
+      if (spentTotal(p.clues) + LETTER_COST > POINTS || c.letters.includes(pos)) return p;
+      return { ...p, clues: { ...p.clues, [p.idx]: { ...c, letters: [...c.letters, pos] } } };
+    });
+  }
+  function showDescription() {
+    if (!canDesc) return;
+    setProg((p) => {
+      const c = p.clues[p.idx] ?? { letters: [], desc: false };
+      if (c.desc || spentTotal(p.clues) + DESC_COST > POINTS) return p;
+      return { ...p, clues: { ...p.clues, [p.idx]: { ...c, desc: true } } };
+    });
+  }
 
   function shake() {
     const r = boardRef.current?.querySelector<HTMLElement>(".row.cur");
@@ -183,7 +228,7 @@ export default function App() {
     <main className="page game"><div className="stage">
       <header className="top">
         <Logo small />
-        <div className="roombar">Word {idx + 1} of {PER_DAY}</div>
+        <div className="roombar"><span>Word {idx + 1} of {PER_DAY} · Clue points <b>{left}</b>/{POINTS}</span></div>
         <div className="pips" aria-hidden="true">
           {Array.from({ length: PER_DAY }, (_, i) => {
             const gg = prog.guesses[i], w = words[i];
@@ -208,6 +253,24 @@ export default function App() {
           })}
           <div id="confetti" />
         </div>
+
+        {(clue.letters.length > 0 || clue.desc) && (
+          <div className="clue">
+            {clue.letters.length > 0 && (
+              <div className="hint-letters" aria-label="Revealed letters">
+                {[0, 1, 2, 3, 4].map((i) => <span key={i} className="hl">{clue.letters.includes(i) ? answer[i] : ""}</span>)}
+              </div>
+            )}
+            {clue.desc && <p className="desc">{HINTS[answer]}</p>}
+          </div>
+        )}
+
+        {!done && (
+          <div className="clues">
+            <button className="cbtn" disabled={!canLetter} onClick={revealLetter}>Reveal a letter · {LETTER_COST} pt</button>
+            <button className="cbtn" disabled={!canDesc} onClick={showDescription}>Description · {DESC_COST} pts</button>
+          </div>
+        )}
 
         {done ? (
           <div className="end">
@@ -253,7 +316,7 @@ function Summary({ words, prog }: { words: string[]; prog: Progress }) {
     return { w, solved, tries: gg.length, last };
   });
   const solvedCount = rows.filter((r) => r.solved).length;
-  const text = `Wrdlilo ${prog.date}  ${solvedCount}/${PER_DAY}\n` +
+  const text = `Wrdlilo ${prog.date}  ${solvedCount}/${PER_DAY}  (${spentTotal(prog.clues)} clue pts)\n` +
     rows.map((r, i) => `${i + 1} ${[...r.last].map((m) => EMOJI[m]).join("")} ${r.solved ? r.tries : "X"}/${MAX_TRIES}`).join("\n");
   const copy = () => {
     const ok = () => { setCopied("Copied!"); setTimeout(() => setCopied(""), 1600); };
@@ -265,7 +328,7 @@ function Summary({ words, prog }: { words: string[]; prog: Progress }) {
   return (
     <main className="page"><div className="stage">
       <Logo small />
-      <p className="tag">Done for today: <b>{solvedCount}</b> of {PER_DAY} solved</p>
+      <p className="tag">Done for today: <b>{solvedCount}</b> of {PER_DAY} solved · {spentTotal(prog.clues)} clue points used</p>
       <div className="sum">
         {rows.map((r, i) => (
           <div key={i} className="sumrow">
