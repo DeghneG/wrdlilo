@@ -1,0 +1,1 @@
+{ "$schema": "https://www.partykit.io/schema.json", "name": "wrdlilo", "main": "party/server.ts", "compatibilityDate": "2024-09-01" }

@@ -1,0 +1,27 @@
+{
+  "name": "wrdlilo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n web,room -c yellow,red \"vite --host\" \"partykit dev\"",
+    "build": "tsc --noEmit && vite build",
+    "deploy:room": "partykit deploy"
+  },
+  "dependencies": {
+    "gsap": "^3.15.0",
+    "partysocket": "*",
+    "react": "*",
+    "react-dom": "*"
+  },
+  "devDependencies": {
+    "@types/react": "*",
+    "@types/react-dom": "*",
+    "@vitejs/plugin-react": "*",
+    "concurrently": "*",
+    "partykit": "*",
+    "typescript": "*",
+    "vite": "*",
+    "ws": "*"
+  }
+}
