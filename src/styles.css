@@ -4,7 +4,11 @@
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--ash);color:var(--cream);font-family:var(--sans)}
 .page{position:relative;z-index:1;min-height:100vh;padding:clamp(16px,4vw,40px) max(16px,env(safe-area-inset-right)) clamp(16px,4vw,40px) max(16px,env(safe-area-inset-left));display:flex;align-items:center;justify-content:center}
-.stage{width:min(940px,100%);border-radius:22px;border:3px solid #2c211a;padding:clamp(26px,5vw,44px) clamp(16px,4vw,44px) clamp(30px,5vw,48px);display:flex;flex-direction:column;align-items:center;gap:30px;background-color:#1b1511;background-image:linear-gradient(135deg,transparent 0 46%,rgba(224,59,36,.10) 46% 54%,transparent 54%),linear-gradient(45deg,transparent 0 46%,rgba(244,184,28,.07) 46% 54%,transparent 54%);background-size:40px 40px}
+.stage{width:min(940px,100%);position:relative;border-radius:24px;border:12px solid transparent;padding:clamp(24px,5vw,40px) clamp(14px,4vw,40px) clamp(28px,5vw,44px);display:flex;flex-direction:column;align-items:center;gap:30px;
+  background:linear-gradient(135deg,transparent 0 46%,rgba(224,59,36,.10) 46% 54%,transparent 54%) padding-box,linear-gradient(45deg,transparent 0 46%,rgba(244,184,28,.07) 46% 54%,transparent 54%) padding-box,linear-gradient(#1b1511,#1b1511) padding-box,repeating-linear-gradient(135deg,#e03b24 0 9px,#f4b81c 9px 18px,#0e5d63 18px 27px,#17120f 27px 31px) border-box;
+  background-size:40px 40px,40px 40px,auto,auto}
+.stage::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(23,18,15,.9);border-radius:19px;pointer-events:none}
+.stage::after{content:"";position:absolute;inset:6px;border:2px solid rgba(244,184,28,.35);border-radius:14px;pointer-events:none}
 .sub{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#bfae8d;margin:0}
 .logo{font-family:var(--display);font-weight:400;font-size:clamp(34px,7vw,56px);color:var(--gold);text-shadow:3px 3px 0 var(--red);margin:0;text-align:center}
 .logo.sm{font-size:clamp(24px,4vw,34px);text-shadow:2px 2px 0 var(--red)}
@@ -57,3 +61,4 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .tile.hide{color:transparent!important}
 /* faint Dinagyang zigzag inside empty and typing tiles; filled tiles stay solid */
 .tile:not(.c):not(.p):not(.a){background-image:linear-gradient(135deg,rgba(244,184,28,.13) 25%,transparent 25%),linear-gradient(225deg,rgba(224,59,36,.13) 25%,transparent 25%),linear-gradient(315deg,rgba(244,184,28,.13) 25%,transparent 25%),linear-gradient(45deg,rgba(224,59,36,.13) 25%,transparent 25%);background-size:14px 14px;background-position:-7px 0,-7px 0,0 0,0 0}
+@media (max-width:480px){.stage{padding-inline:10px}.kb>div{gap:4px}.key{min-width:6.1vw;height:46px;padding:0}.key.wide{min-width:10.5vw}.board{gap:6px}.row{gap:6px;grid-template-columns:repeat(5,min(var(--t),13.5vw))}.tile{width:min(var(--t),13.5vw);height:min(var(--t),13.5vw)}}
