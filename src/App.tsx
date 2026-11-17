@@ -56,6 +56,7 @@ function Game({ name, room }: { name: string; room: string }) {
   const prevRows = useRef(0);
   const prevRound = useRef(0);
 
+  const pending = useRef(false);
   const send = useCallback((m: ClientMsg) => sock.current?.send(JSON.stringify(m)), []);
   const say = (s: string) => { setToast(s); setTimeout(() => setToast(""), 1600); };
 
@@ -71,6 +72,7 @@ function Game({ name, room }: { name: string; room: string }) {
     ws.addEventListener("close", () => setConn(false));
     ws.addEventListener("message", (e) => {
       const m: ServerMsg = JSON.parse(e.data);
+      pending.current = false;
       if (m.t === "state") setSt(m);
       else { say(m.msg); shake(); }
     });
@@ -96,7 +98,9 @@ function Game({ name, room }: { name: string; room: string }) {
 
   const press = useCallback((k: string) => {
     if (!st || done) return;
-    if (k === "enter") { if (cur.length === 5) send({ t: "guess", word: cur }); else { say("Kulang ang letra"); shake(); } }
+    if (k === "enter") {
+      if (pending.current) return;
+      if (cur.length === 5) { pending.current = true; setTimeout(() => { pending.current = false; }, 2000); send({ t: "guess", word: cur }); } else { say("Kulang ang letra"); shake(); } }
     else if (k === "back") setCur((c) => c.slice(0, -1));
     else if (/^[a-zñ]$/.test(k)) setCur((c) => (c.length < 5 ? c + k : c));
   }, [st, done, cur, send]);
@@ -128,6 +132,7 @@ function Game({ name, room }: { name: string; room: string }) {
 
   const link = `${location.origin}/?room=${room}`;
   const others = st?.players.filter((p) => p.id !== st.you) ?? [];
+  const waiting = others.filter((p) => p.online && !p.done && p.marks.length > 0).length;
 
   return (
     <main className="page game"><div className="stage">
@@ -159,7 +164,9 @@ function Game({ name, room }: { name: string; room: string }) {
           {done ? (
             <div className="end">
               <p>{me?.won ? "Nakuha mo!" : "Ay, indi nakuha."} Ang pulong: <b className="ans">{st?.answer}</b></p>
-              <button className="go" onClick={() => send({ t: "next" })}>Bag-ong pulong</button>
+              <button className="go" disabled={waiting > 0} onClick={() => send({ t: "next" })}>
+                {waiting > 0 ? `Hulat sa ${waiting} ka kaupod` : "Bag-ong pulong"}
+              </button>
             </div>
           ) : (
             <div className="kb">

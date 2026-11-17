@@ -38,6 +38,9 @@ export default class WordleRoom implements Party.Server {
     }
     if (m.t === "next") {
       if (!this.isDone(p)) return;
+      const online = new Set(this.conns.values());
+      const busy = [...this.players.values()].filter((q) => online.has(q.id) && q.guesses.length > 0 && !this.isDone(q)).length;
+      if (busy > 0) return sender.send(JSON.stringify({ t: "error", msg: "Hulat anay ang mga kaupod" }));
       let next = this.answer;
       for (let i = 0; i < 30 && this.recent.includes(next); i++) next = ANSWERS[Math.floor(Math.random() * ANSWERS.length)];
       this.answer = next;
