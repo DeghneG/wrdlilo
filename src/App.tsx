@@ -12,6 +12,32 @@ const store = {
 const myId = store.get("wl-id") ?? (() => { const v = Math.random().toString(36).slice(2, 12); store.set("wl-id", v); return v; })();
 const params = new URLSearchParams(location.search);
 
+// The "o" in Wrdlilo: an original Ati-Atihan style mask with a fanned headdress.
+function MaskO() {
+  const colors = ["#17a3a8", "#f4b81c", "#e03b24"];
+  const fan = (r: number, n: number, from: number, step: number, half: number) =>
+    Array.from({ length: n }, (_, i) => {
+      const a = from + i * step, p = (deg: number, rad: number) => [50 + Math.sin((deg * Math.PI) / 180) * rad, 60 - Math.cos((deg * Math.PI) / 180) * rad];
+      const [x1, y1] = p(a - half, r), [x2, y2] = p(a + half, r), [tx, ty] = p(a, r + 4);
+      return <path key={r + "-" + i} d={`M50 60 L${x1} ${y1} Q${tx} ${ty} ${x2} ${y2} Z`} fill={colors[(i + (r > 40 ? 0 : 1)) % 3]} />;
+    });
+  return (
+    <svg className="maskO" viewBox="0 0 100 110" role="img" aria-hidden="true">
+      {fan(46, 7, -72, 24, 11.5)}
+      {fan(33, 6, -60, 24, 11.5)}
+      <path d="M19 52 Q50 26 81 52 L76 88 Q50 116 24 88 Z" fill="#0b0806" stroke="#f4b81c" strokeWidth="3" strokeLinejoin="round" />
+      <circle cx="50" cy="50" r="11" fill="#e03b24" stroke="#fff" strokeWidth="2.5" strokeDasharray="3 2.2" />
+      <path d="M27 66 L46 66 L36.5 81 Z M54 66 L73 66 L63.5 81 Z" fill="#fff" />
+      <path d="M27 85 L37 85 L32 96 Z M63 85 L73 85 L68 96 Z" fill="#fff" />
+      <path d="M42 92 Q50 100 58 92 Q50 97 42 92 Z" fill="#e03b24" stroke="#e03b24" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function Logo({ small }: { small?: boolean }) {
+  return <h1 className={"logo" + (small ? " sm" : "")} aria-label="Wrdlilo">Wrdlil<MaskO /></h1>;
+}
+
 export default function App() {
   const [name, setName] = useState(store.get("wl-name") ?? "");
   const [room, setRoom] = useState(params.get("room") ?? "");
@@ -28,19 +54,19 @@ function Lobby(p: { name: string; room: string; setName: (s: string) => void; se
   const ok = p.name.trim() && p.room.trim();
   return (
     <main className="page lobby"><div className="stage">
-      <h1 className="logo">Wrdlilo</h1>
-      <p className="tag">Hulaton ang pulong. Isa lang nga pulong para sa tanan sa kwarto.</p>
+      <Logo />
+      <p className="tag">Guess the word. One word for everyone in the room.</p>
       <form onSubmit={(e) => { e.preventDefault(); if (ok) p.onGo(); }} className="lobby-form">
-        <label>Ngalan<input value={p.name} maxLength={16} onChange={(e) => p.setName(e.target.value)} autoFocus /></label>
-        <label>Kwarto (room)
+        <label>Name<input value={p.name} maxLength={16} onChange={(e) => p.setName(e.target.value)} autoFocus /></label>
+        <label>Room
           <span className="row-in">
             <input value={p.room} onChange={(e) => p.setRoom(e.target.value.replace(/[^\w-]/g, "").toLowerCase())} />
-            <button type="button" className="ghost" onClick={() => p.setRoom("balay-" + Math.floor(Math.random() * 900 + 100))}>Bag-o</button>
+            <button type="button" className="ghost" onClick={() => p.setRoom("balay-" + Math.floor(Math.random() * 900 + 100))}>New</button>
           </span>
         </label>
-        <button className="go" disabled={!ok}>Pasulod</button>
+        <button className="go" disabled={!ok}>Join</button>
       </form>
-      <p className="hint">Ipadala ang link sa imo mga abyan pagkatapos magsulod.</p>
+      <p className="hint">Share the link with your friends after you join.</p>
       </div>
     </main>
   );
@@ -100,7 +126,7 @@ function Game({ name, room }: { name: string; room: string }) {
     if (!st || done) return;
     if (k === "enter") {
       if (pending.current) return;
-      if (cur.length === 5) { pending.current = true; setTimeout(() => { pending.current = false; }, 2000); send({ t: "guess", word: cur }); } else { say("Kulang ang letra"); shake(); } }
+      if (cur.length === 5) { pending.current = true; setTimeout(() => { pending.current = false; }, 2000); send({ t: "guess", word: cur }); } else { say("Not enough letters"); shake(); } }
     else if (k === "back") setCur((c) => c.slice(0, -1));
     else if (/^[a-zñ]$/.test(k)) setCur((c) => (c.length < 5 ? c + k : c));
   }, [st, done, cur, send]);
@@ -180,10 +206,10 @@ function Game({ name, room }: { name: string; room: string }) {
   return (
     <main className="page game"><div className="stage">
       <header className="top">
-        <h1 className="logo sm">Wrdlilo</h1>
+        <Logo small />
         <div className="roombar">
           <span className={"dot" + (conn ? " on" : "")} /> <b>{room}</b> · round {st?.round ?? "-"}
-          <button className="ghost" onClick={() => { navigator.clipboard?.writeText(link).then(() => say("Link nakopya"), () => say(link)); }}>Kopyaha ang link</button>
+          <button className="ghost" onClick={() => { navigator.clipboard?.writeText(link).then(() => say("Link copied"), () => say(link)); }}>Copy link</button>
         </div>
       </header>
 
@@ -206,9 +232,9 @@ function Game({ name, room }: { name: string; room: string }) {
 
           {done ? (
             <div className="end">
-              <p>{me?.won ? "Nakuha mo!" : "Ay, indi nakuha."} Ang pulong: <b className="ans">{st?.answer}</b></p>
+              <p>{me?.won ? "You got it!" : "Not this time."} The word: <b className="ans">{st?.answer}</b></p>
               <button className="go" disabled={waiting > 0} onClick={() => send({ t: "next" })}>
-                {waiting > 0 ? `Hulat sa ${waiting} ka kaupod` : "Bag-ong pulong"}
+                {waiting > 0 ? `Waiting for ${waiting} ${waiting === 1 ? "friend" : "friends"}` : "New word"}
               </button>
             </div>
           ) : (
@@ -225,8 +251,8 @@ function Game({ name, room }: { name: string; room: string }) {
         </section>
 
         <aside className="friends">
-          <h2>Mga kaupod</h2>
-          {others.length === 0 && <p className="hint">Wala pa sang iban. Ipadala ang link.</p>}
+          <h2>Friends</h2>
+          {others.length === 0 && <p className="hint">No one else yet. Share the link.</p>}
           {others.map((p) => <Mini key={p.id} p={p} max={st?.maxTries ?? 6} />)}
         </aside>
       </div>
@@ -238,7 +264,7 @@ function Game({ name, room }: { name: string; room: string }) {
 function Mini({ p, max }: { p: PlayerView; max: number }) {
   return (
     <div className={"mini" + (p.online ? "" : " off")}>
-      <div className="mini-h"><b>{p.name}</b><span>{p.done ? (p.won ? "nakuha" : "natapos") : `${p.marks.length}/${max}`}</span></div>
+      <div className="mini-h"><b>{p.name}</b><span>{p.done ? (p.won ? "solved" : "finished") : `${p.marks.length}/${max}`}</span></div>
       <div className="mini-b">
         {Array.from({ length: max }, (_, r) => (
           <div key={r} className="mrow">

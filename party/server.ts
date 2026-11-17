@@ -19,7 +19,7 @@ export default class WordleRoom implements Party.Server {
     let m: ClientMsg;
     try { m = JSON.parse(raw); } catch { return; }
     if (m.t === "join") {
-      const name = String(m.name || "Abyan").slice(0, 16);
+      const name = String(m.name || "Friend").slice(0, 16);
       const id = String(m.id).slice(0, 40);
       this.conns.set(sender.id, id);
       const ex = this.players.get(id);
@@ -32,7 +32,7 @@ export default class WordleRoom implements Party.Server {
     if (m.t === "guess") {
       const w = String(m.word).toLowerCase();
       if (this.isDone(p)) return;
-      if (!/^[a-zñ]{5}$/.test(w)) return sender.send(JSON.stringify({ t: "error", msg: "Kinahanglan 5 ka letra" }));
+      if (!/^[a-zñ]{5}$/.test(w)) return sender.send(JSON.stringify({ t: "error", msg: "Needs 5 letters" }));
       p.guesses.push(w);
       return this.broadcast();
     }
@@ -40,7 +40,7 @@ export default class WordleRoom implements Party.Server {
       if (!this.isDone(p)) return;
       const online = new Set(this.conns.values());
       const busy = [...this.players.values()].filter((q) => online.has(q.id) && q.guesses.length > 0 && !this.isDone(q)).length;
-      if (busy > 0) return sender.send(JSON.stringify({ t: "error", msg: "Hulat anay ang mga kaupod" }));
+      if (busy > 0) return sender.send(JSON.stringify({ t: "error", msg: "Wait for your friends to finish" }));
       let next = this.answer;
       for (let i = 0; i < 30 && this.recent.includes(next); i++) next = ANSWERS[Math.floor(Math.random() * ANSWERS.length)];
       this.answer = next;

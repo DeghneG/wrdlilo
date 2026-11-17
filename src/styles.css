@@ -62,3 +62,4 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 /* faint Dinagyang zigzag inside empty and typing tiles; filled tiles stay solid */
 .tile:not(.c):not(.p):not(.a){background-image:linear-gradient(135deg,rgba(244,184,28,.13) 25%,transparent 25%),linear-gradient(225deg,rgba(224,59,36,.13) 25%,transparent 25%),linear-gradient(315deg,rgba(244,184,28,.13) 25%,transparent 25%),linear-gradient(45deg,rgba(224,59,36,.13) 25%,transparent 25%);background-size:14px 14px;background-position:-7px 0,-7px 0,0 0,0 0}
 @media (max-width:480px){.stage{padding-inline:10px}.kb>div{gap:4px}.key{min-width:6.1vw;height:46px;padding:0}.key.wide{min-width:10.5vw}.board{gap:6px}.row{gap:6px;grid-template-columns:repeat(5,min(var(--t),13.5vw))}.tile{width:min(var(--t),13.5vw);height:min(var(--t),13.5vw)}}
+.maskO{display:inline-block;height:1.5em;width:1.36em;vertical-align:-.3em;margin-left:.04em;overflow:visible;filter:drop-shadow(2px 2px 0 #e03b24)}
